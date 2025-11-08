@@ -1,10 +1,5 @@
-import { Name } from './name';
+import { Person } from './person'
 
-export interface User {
-    id: number;
-    name: Name;
-    dateOfBirth?: Date;
-    gender: string;
-    photoFileName: string;
-    isActive: boolean;
+export interface User extends Person{
+
 }
