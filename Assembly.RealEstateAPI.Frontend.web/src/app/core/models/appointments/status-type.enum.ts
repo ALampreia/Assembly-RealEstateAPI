@@ -1,5 +1,5 @@
 export enum StatusType{
-    Confirmada = 0,
-    Cancelada = 1,
-    concluida = 2
+    Confirmed = 0,
+    Cancelles = 1,
+    Completed = 2
 }

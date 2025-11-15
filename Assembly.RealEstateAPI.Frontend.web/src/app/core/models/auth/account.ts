@@ -1,5 +1,5 @@
 export interface Account{
-    int: number;
+    id: number;
     passwordHash: string;
     passwordSalt: string;
     email: string;
