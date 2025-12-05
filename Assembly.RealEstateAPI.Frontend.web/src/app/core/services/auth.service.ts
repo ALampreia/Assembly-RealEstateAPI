@@ -2,6 +2,8 @@ import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Credentials } from '../models/auth/credentials';
+import { Observable, defer, throwError } from 'rxjs';
+import { tap, catchError, finalize, mapTo } from 'rxjs/operators';
 
 interface AuthState {
     token: string | null;
@@ -46,52 +48,57 @@ export class AuthService{
     readonly isStaff = computed(() => this.authState().role === 'Staff');
     readonly isUser = computed(() => this.authState().role === 'User');
 
-    async loginEmployee(credentials: Credentials): Promise<void>{
-        this.loading.set(true);
-        this.error.set(null);
-        try{
-            const token = await this http.post<string>(
+    loginEmployee(credentials: Credentials): Observable<void>{
+        return defer(() => {
+            this.loading.set(true);
+            this.error.set(null);
+            return this.http.post<string>(
                 `${this.apiUrl}/AuthenticationEmployee`,
                 credentials,
                 {responseType: 'text' as 'json'}
-            ).toPromise();
-
-            if(token){
-                this.setAuthToken(token);
-                this.router.navigate{['/dashboard']};
-            }
-        } catch (error: any){
-            this.error.set(error.message || 'Login failed');
-            throw error;
-        } finally {
-            this.loading.set(false);
-        }
+            ).pipe(
+                tap(token => {
+                    if(token) {
+                        this.setAuthToken(token);
+                        this.router.navigate(['/dashboard']);
+                    }
+                }),
+                mapTo(void 0),
+                catchError(err => {
+                    this.error.set(err?.message || 'Login failed');
+                }),
+                finalize(() => this.loading.set(false))
+            );
+        });
     }
 
-    async loginUser(credentials: Credentials): Promise<void>{
-        this.loading.set(true);
-        this.error.set(null);
-        try{
-            const token = await this.http.post<string>(
+    loginUser(credentials: Credentials): Observable<void>{
+        return defer (() => {
+            this.loading.set(true);
+            this.error.set(null);
+            return this.http.post<string>(
                 `${this.apiUrl}/AuthenticationUser`,
                 credentials,
-                { responseType: 'text' as 'json'}
-            ).toPromise();
-
-            if(token){
-                this.setAuthToken(token);
-                this.router.navigate{['/']};
-            }
-        } catch(error: any){
-            this.error.set(error.message || 'Login failed');
-            throw error;
-        } finally {
-            this.loading.set(false);
-        }
+                {responseType: 'text' as 'json'}
+            ).pipe(
+                tap(token => {
+                    if(token) {
+                        this.setAuthToekn(token);
+                        this.router.navigate(['/']);
+                    }
+                }),
+                mapTo(void 0),
+                catchError(err => {
+                    this.error.set(err?.message || 'Login failed');
+                    return throwError(() => err);
+                }),
+                finalize(() => this.loading.set(false))
+            );
+        });
     }
 
     logout(): void{
-        localStorage.removeItem('/authToken');
+        localStorage.removeItem('authToken');
         this.authState.set({
             token: null,
             isAuthenticated: false,
@@ -113,7 +120,7 @@ export class AuthService{
         });
     }
 
-    private parseTokenClaim(claim: striing, token?: string): any{
+    private parseTokenClaim(claim: string, token?: string): any{
         const tokenToUse = token || localStorage.getItem('authToken');
         if (!tokenToUse)
             return null;

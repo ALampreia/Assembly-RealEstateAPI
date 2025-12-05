@@ -1,4 +1,4 @@
-
+import { StatusType} from './status-type.enum'
 
 export interface Appointment{
     title: string;
