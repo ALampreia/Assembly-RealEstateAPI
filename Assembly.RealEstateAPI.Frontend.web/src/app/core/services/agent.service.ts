@@ -2,6 +2,9 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Agent } from '../models/employee/agent';
 import { CreateAgent } from '../models/employee/create-agent';
+import { Observable, defer, throwError } from 'rxjs';
+import { tap, catchError, finalize, map } from 'rxjs/operators';
+
 
 @Injectable({
     providedIn: 'root'
@@ -15,16 +18,19 @@ export class AgentService {
     loading = signal(false);
     error = signal<string | null>(null);
 
-    async loadAll(): Promise<void>{
+    loadAll(): Observable<void>{
+      return defer(() => {
         this.loading.set(true);
         this.error.set(null);
-        try{
-            const data = await this.http.get<Agent[]>(this.apiUrl).toPromise();
-            this.agents.set(data || []);
-        } catch (error: any){
-            this.error.set(error.message || 'Failed to load agents');
-        } finally {
-            this.loading.set(false);
-        }
-    }
-}
+        return this.http.get<Agent[]>(this.apiUrl)
+        .pipe(
+          tap(data => this.agents.set(data ?? [])),
+          map(() => void 0),
+          catchError( error => {
+            this.error.set((error as any)?.message ?? 'Failed to load agents');
+            return throwError(() => error);
+        }),
+      finalize(() => this.loading.set(false))
+      );
+    });
+  }

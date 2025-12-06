@@ -1,7 +1,9 @@
 import { Injectable, inject, signal} from '@angular/core';
 import { HttpClient} from '@angular/common/http';
 import { User} from '../models/shared/user';
-import {CreateUser} from '../models/shared/create-user';
+import { CreateUser } from '../models/shared/create-user';
+import { Observable, defer, throwError } from 'rxjs';
+import { tap, catchError, finalize, map } from 'rxjs/operators';
 
 @Injectable({
     providedIn: 'root'
@@ -10,98 +12,125 @@ import {CreateUser} from '../models/shared/create-user';
 export class UserService {
     private http = inject(HttpClient);
     private readonly apiUrl = 'http://localhost:5109/api/user';
-    
+
     users = signal<User[]>([]);
     selectedUser = signal< User | null>(null);
     loading = signal(false);
     error = signal<string | null>(null);
 
-    async loadAll():Promise<void>{
+    loadAll():Observable<void>{
+      return defer(() => {
         this.loading.set(true);
         this.error.set(null);
-        try{
-            const data = await this.http.get<User[]>(this.apiUrl).toPromise();
-            this.users.set(data || []);
-        } catch (error: any){
-            this.error.set(error.message || 'Failed to load users');
-        } finally {
-            this.loading.set(false);
-        }
+        return this.http.get<User[]>(this.apiUrl)
+        .pipe(
+          tap(data => this.users.set(data ?? [])),
+          map(() => void 0),
+          catchError( error => {
+            this.error.set((error as any)?.message ?? 'Failed to load users');
+            return throwError(() => error);
+            }),
+          finalize(() => this.loading.set(false))
+          );
+        });
     }
 
-    async loadById(id: number): Promise<void>{
-        this.loading.set(true);
-        this.error.set(null);
-        try{
-            const data = await this.http.get<User>(`${this.apiUrl}/${id}`).toPromise();
-            this.selectedUser.set(data|| null);
-        } catch (error: any){
-            this.error.set(error.message || 'Failed to load user');
-        } finally {
-            this.loading.set(false);
-        }
+    loadById(id: number): Observable<void>{
+        return defer(() => {
+          this.loading.set(true);
+          this.error.set(null);
+          return this.http.get<User>(`${this.apiUrl}/${id}`)
+          .pipe(
+            tap(this.selectedUser.set(data ?? null)),
+            map(() => void 0),
+            catchError( error => {
+              this.error.set((error as any)?.message ?? 'Failed to load user');
+              return throwError(() => error);
+            }),
+          finalize(() => this.loading.set(false))
+          );
+        });
     }
 
-    async loadByEmail(email: string): Promise<void>{
+    loadByEmail(email: string): Observable<void>{
+      return defer(() => {
         this.loading.set(true);
         this.error.set(null);
-        try{
-            const data = await this.http.get<User>(`${this.apiUrl}/GetByEmail?email=${email}`).toPromise();
-            this.selectedUser.set(data|| null);
-        } catch (error: any){
-            this.error.set(error.message || 'Failed to load user');
-        } finally {
-            this.loading.set(false);
-        }
+        return this.http.get<User>(`${this.apiUrl}/GetByEmail?email=${email}`)
+        .pipe(
+          tap(this.selectedUser.set(data ?? null)),
+          map(() => void 0),
+          catchError( error => {
+            this.error.set((error as any)?.message ?? 'Failed to load user');
+            return throwError(() => error);
+            }),
+          finalize(() => this.loading.set(false))
+          );
+        });
     }
 
-    async Create(user: CreateUser): Promise<User | null> {
+    create(user: CreateUser): Observable<User | null> {
+        return defer(() =>{
         this.loading.set(true);
         this.error.set(null);
-        try {
-            const created = await this.http.post<User>(this.apiUrl, user).toPromise();
-            if (created) {
-                this.users.update(list => ...[list, created]);
+        return this.http.post<User>(this.apiUrl, user)
+        .pipe(
+          tap(created => {
+            if(created)
+            this.users.update(list => [...list, created]);
+            }),
+          map(created => created ?? null),
+          catchError(error => {
+            this.error.set((error as any)?.message?? 'Failed to create user');
+            return throwError(() => error);
+            }),
+          finalize(() => this.loading.set(false))
+        );
+      });
+    }
+
+    update(id: number, user: User): Observable<User | null> {
+        return defer(() => {
+          this.loading.set(true);
+          this.error.set(null);
+          return this.http.put<User>(`${this.apiUrl}/${id}, user`)
+          .pipe(
+            tap(updated => {
+              if(updated) {
+                this.users.update(list => list.map( u => (u.id === id ? updated : u)));
+                if(this.selectedUser() && this.selectedUser()!.id === id){
+                  this.selectedUser.set(updated);
+                  }
+                }
+              }),
+                map(updated => updated ?? null),
+                catchError(error => {
+                  this.error.set((error as any)?.message ?? 'Failed to update user');
+                  return throwError(() => error);
+              }),
+              finalize(() =>this.loading.set(false))
+              );
+            });
+    }
+
+    delete(id: number): Observable<boolean>{
+      return defer(() => {
+        this.loading.set(true);
+        this.error.set(null);
+        return this.http.delete<void>(`${this.apiUrl}/${id}`)
+        .pipe(
+          tap(() => {
+            this.users.update(list => list.filter(u => u.id !== id));
+            if(this.selectedUser() && this.selectedUser()!.id === id){
+              this.selectedUser.set(null);
             }
-            return created || null;
-        } catch (error: any){
-            this.error.set(error.message || 'Failed to create user');
-            return null;
-        } finally {
-            this.loading.set(false);
-        }
+          }),
+        map(() => true),
+        catchError(error => {
+          this.error.set((error as any)?.message ?? 'Failed to delete user');
+          return throwError(() => error);
+          }),
+        finalize(() => this.loading.set(false))
+        );
+      });
     }
-
-    async update(id: number, user: User): Promise<User | null> {
-        this.loading.set(true);
-        this.error.set(null);
-        try {
-            const updated = await this.http.put<User>(`${this.apiUrl}/${id}, user`).toPromise();
-            if(updated){
-                this.users.update(list =>
-                    list.map( u => u.id ? updated : u)
-                );
-            }
-            return updated || null;
-        } catch (error: any){
-            this.error.set(error.message || 'Failed to update user');
-            return null;
-        } finally {
-            this.loading.set(false);
-        }
-    }
-
-    async delete(id: number): Promise<boolean>{
-        this.loading.set(true);
-        this.error.set(null);
-    }try {
-        await this.http.delete(`${this.apiUrl}/${id}`).toPromise();
-        this.users.update(list => list.filter(u => u.id !== id));
-        return true;
-    } catch (error: any){
-        this.error.set(error.message || 'Failed to delete user');
-        return false;
-    }finally{
-        this.loading.set(false);
-    }
-}
