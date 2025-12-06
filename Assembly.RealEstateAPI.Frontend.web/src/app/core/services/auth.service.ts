@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Credentials } from '../models/auth/credentials';
 import { Observable, defer, throwError } from 'rxjs';
-import { tap, catchError, finalize, mapTo } from 'rxjs/operators';
+import { tap, catchError, finalize, map } from 'rxjs/operators';
 
 interface AuthState {
     token: string | null;
@@ -63,9 +63,10 @@ export class AuthService{
                         this.router.navigate(['/dashboard']);
                     }
                 }),
-                mapTo(void 0),
+                map(() => void 0),
                 catchError(err => {
                     this.error.set(err?.message || 'Login failed');
+                    return throwError(() => err);
                 }),
                 finalize(() => this.loading.set(false))
             );
@@ -83,11 +84,11 @@ export class AuthService{
             ).pipe(
                 tap(token => {
                     if(token) {
-                        this.setAuthToekn(token);
+                        this.setAuthToken(token);
                         this.router.navigate(['/']);
                     }
                 }),
-                mapTo(void 0),
+                map(() => void 0),
                 catchError(err => {
                     this.error.set(err?.message || 'Login failed');
                     return throwError(() => err);
